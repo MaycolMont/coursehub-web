@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Carrera, Facultad, Materia, MateriaProfesor, Profesor
+from .models import Carrera, CarreraMateria, Facultad, Materia, MateriaProfesor, Profesor
 
 
 class FacultadSerializer(serializers.ModelSerializer):
@@ -24,21 +24,44 @@ class ProfesorSerializer(serializers.ModelSerializer):
 
 
 class MateriaListSerializer(serializers.ModelSerializer):
-    carrera_nombre = serializers.CharField(source='carrera.nombre', read_only=True)
-    facultad_nombre = serializers.CharField(source='carrera.facultad.nombre', read_only=True)
+    carreras_list = serializers.SerializerMethodField()
     recursos_count = serializers.IntegerField(source='recursos.count', read_only=True)
 
     class Meta:
         model = Materia
         fields = [
-            'id', 'codigo', 'nombre', 'carrera', 'carrera_nombre',
-            'facultad_nombre', 'activo', 'recursos_count',
+            'id', 'codigo', 'nombre', 'carreras_list',
+            'activo', 'recursos_count',
+        ]
+
+    def get_carreras_list(self, obj):
+        return [
+            {
+                'id': cm.carrera.id,
+                'nombre': cm.carrera.nombre,
+                'facultad_nombre': cm.carrera.facultad.nombre,
+            }
+            for cm in obj.carreramateria_set.select_related('carrera__facultad').all()
         ]
 
 
 class MateriaSerializer(serializers.ModelSerializer):
+    carreras = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Carrera.objects.all(),
+    )
+
     class Meta:
         model = Materia
+        fields = '__all__'
+
+
+class CarreraMateriaSerializer(serializers.ModelSerializer):
+    carrera_nombre = serializers.CharField(source='carrera.nombre', read_only=True)
+    materia_codigo = serializers.CharField(source='materia.codigo', read_only=True)
+    materia_nombre = serializers.CharField(source='materia.nombre', read_only=True)
+
+    class Meta:
+        model = CarreraMateria
         fields = '__all__'
 
 

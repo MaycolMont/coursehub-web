@@ -1,10 +1,13 @@
+from django.db import models
+
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
-from .models import Carrera, Facultad, Materia, MateriaProfesor, Profesor
+from .models import Carrera, CarreraMateria, Facultad, Materia, MateriaProfesor, Profesor
 from .serializers import (
+    CarreraMateriaSerializer,
     CarreraSerializer,
     FacultadSerializer,
     MateriaListSerializer,
@@ -43,12 +46,9 @@ class ProfesorViewSet(viewsets.ModelViewSet):
 
 
 class MateriaViewSet(viewsets.ModelViewSet):
-    queryset = (
-        Materia.objects
-        .select_related('carrera__facultad')
-        .prefetch_related('recursos')
-        .all()
-    )
+    queryset = Materia.objects.prefetch_related(
+        'carreramateria_set__carrera__facultad', 'recursos',
+    ).all()
     permission_classes = [IsAuthenticatedOrReadOnly]
     search_fields = ['codigo', 'nombre']
 
@@ -63,11 +63,11 @@ class MateriaViewSet(viewsets.ModelViewSet):
 
         carrera_id = params.get('carrera_id')
         if carrera_id:
-            qs = qs.filter(carrera_id=carrera_id)
+            qs = qs.filter(carreramateria__carrera_id=carrera_id)
 
         facultad_id = params.get('facultad_id')
         if facultad_id:
-            qs = qs.filter(carrera__facultad_id=facultad_id)
+            qs = qs.filter(carreramateria__carrera__facultad_id=facultad_id)
 
         activo = params.get('activo')
         if activo is not None:
@@ -80,7 +80,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
                 models.Q(nombre__icontains=search)
             )
 
-        return qs
+        return qs.distinct()
 
     @action(detail=False, methods=['get'])
     def catalogo(self, request):
@@ -91,6 +91,25 @@ class MateriaViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+
+class CarreraMateriaViewSet(viewsets.ModelViewSet):
+    queryset = CarreraMateria.objects.select_related(
+        'carrera__facultad', 'materia',
+    ).all()
+    serializer_class = CarreraMateriaSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        carrera_id = params.get('carrera_id')
+        if carrera_id:
+            qs = qs.filter(carrera_id=carrera_id)
+        materia_id = params.get('materia_id')
+        if materia_id:
+            qs = qs.filter(materia_id=materia_id)
+        return qs
 
 
 class MateriaProfesorViewSet(viewsets.ModelViewSet):

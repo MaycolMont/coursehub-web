@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Carrera, Facultad, Materia, MateriaProfesor, Profesor
+from .models import Carrera, CarreraMateria, Facultad, Materia, MateriaProfesor, Profesor
 
 
 @admin.register(Facultad)
@@ -19,9 +19,19 @@ class CarreraAdmin(admin.ModelAdmin):
 
 @admin.register(Materia)
 class MateriaAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'carrera', 'activo')
+    list_display = ('codigo', 'nombre', 'listar_carreras', 'activo')
     search_fields = ('codigo', 'nombre')
-    list_filter = ('carrera', 'activo')
+    list_filter = ('activo',)
+
+    def listar_carreras(self, obj):
+        return ', '.join(obj.carreras.values_list('nombre', flat=True))
+    listar_carreras.short_description = 'Carreras'
+
+
+@admin.register(CarreraMateria)
+class CarreraMateriaAdmin(admin.ModelAdmin):
+    list_display = ('carrera', 'materia')
+    search_fields = ('carrera__nombre', 'materia__nombre', 'materia__codigo')
 
 
 @admin.register(Profesor)

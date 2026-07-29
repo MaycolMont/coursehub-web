@@ -32,9 +32,8 @@ class Carrera(models.Model):
 class Materia(models.Model):
     codigo = models.CharField(max_length=20, unique=True)
     nombre = models.CharField(max_length=150)
-    carrera = models.ForeignKey(
-        Carrera, on_delete=models.RESTRICT, db_column='carrera_id',
-        related_name='materias',
+    carreras = models.ManyToManyField(
+        Carrera, through='CarreraMateria', related_name='materias',
     )
     activo = models.BooleanField(default=True)
 
@@ -44,6 +43,23 @@ class Materia(models.Model):
 
     def __str__(self):
         return f'{self.codigo} - {self.nombre}'
+
+
+class CarreraMateria(models.Model):
+    carrera = models.ForeignKey(
+        Carrera, on_delete=models.RESTRICT, db_column='carrera_id',
+    )
+    materia = models.ForeignKey(
+        Materia, on_delete=models.RESTRICT, db_column='materia_id',
+    )
+
+    class Meta:
+        db_table = 'carreras_materias'
+        unique_together = ('carrera', 'materia')
+        verbose_name_plural = 'carreras_materias'
+
+    def __str__(self):
+        return f'{self.carrera} - {self.materia}'
 
 
 class Profesor(models.Model):
