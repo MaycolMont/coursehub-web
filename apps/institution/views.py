@@ -47,7 +47,7 @@ class ProfesorViewSet(viewsets.ModelViewSet):
 
 class MateriaViewSet(viewsets.ModelViewSet):
     queryset = Materia.objects.prefetch_related(
-        'carreramateria_set__carrera__facultad', 'recursos',
+        'carreramateria_set__carrera__facultad',
     ).all()
     permission_classes = [IsAuthenticatedOrReadOnly]
     search_fields = ['codigo', 'nombre']

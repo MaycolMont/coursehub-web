@@ -25,7 +25,7 @@ class ProfesorSerializer(serializers.ModelSerializer):
 
 class MateriaListSerializer(serializers.ModelSerializer):
     carreras_list = serializers.SerializerMethodField()
-    recursos_count = serializers.IntegerField(source='recursos.count', read_only=True)
+    recursos_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Materia
@@ -43,6 +43,15 @@ class MateriaListSerializer(serializers.ModelSerializer):
             }
             for cm in obj.carreramateria_set.select_related('carrera__facultad').all()
         ]
+
+    def get_recursos_count(self, obj):
+        from django.db.models import Count, Subquery, OuterRef
+        from apps.content.models import Recurso, Coleccion
+        return Recurso.objects.filter(
+            coleccion__in=Subquery(
+                Coleccion.objects.filter(materia=obj).values('id')
+            )
+        ).count()
 
 
 class MateriaSerializer(serializers.ModelSerializer):
