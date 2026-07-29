@@ -12,8 +12,6 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
-AUTH_USER_MODEL = 'accounts.User'
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -27,6 +25,9 @@ INSTALLED_APPS = [
     'drf_spectacular',
 
     'apps.accounts',
+    'apps.institution',
+    'apps.content',
+    'apps.interaction',
 ]
 
 MIDDLEWARE = [
