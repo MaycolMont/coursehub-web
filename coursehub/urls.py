@@ -8,6 +8,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='docs'),
+
+    path('api/', include('apps.accounts.urls')),
+    path('api/', include('apps.institution.urls')),
+    path('api/', include('apps.content.urls')),
+    path('api/', include('apps.interaction.urls')),
 ]
 
 if settings.DEBUG:
