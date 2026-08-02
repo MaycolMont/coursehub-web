@@ -1,10 +1,16 @@
-from rest_framework import generics, status, viewsets
+import uuid
+
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Rango, Usuario
 from .serializers import (
+    ChangePasswordSerializer,
+    CourseHubTokenObtainPairSerializer,
     RangoSerializer,
     RegisterSerializer,
     UsuarioProfileSerializer,
@@ -70,12 +76,12 @@ class UsuarioViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(data)
 
 
-class RegisterView(generics.GenericAPIView):
+class RegisterView(APIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
+        serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         correo = serializer.validated_data['correo']
@@ -92,43 +98,81 @@ class RegisterView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        usuario = Usuario.objects.create(
-            microsoft_id=correo,
+        usuario = Usuario(
             correo_institucional=correo,
             pseudonimo=pseudonimo,
+            microsoft_id=str(uuid.uuid4()),
         )
-        return Response(
-            UsuarioProfileSerializer(usuario).data,
-            status=status.HTTP_201_CREATED,
-        )
+        usuario.set_password(serializer.validated_data['password'])
+        usuario.save()
+
+        refresh = RefreshToken.for_user(usuario)
+        return Response({
+            'usuario': UsuarioProfileSerializer(usuario).data,
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }, status=status.HTTP_201_CREATED)
 
 
-class LoginView(generics.GenericAPIView):
+class LoginView(APIView):
+    serializer_class = CourseHubTokenObtainPairSerializer
     permission_classes = [AllowAny]
 
     def post(self, request):
-        correo = request.data.get('correo', '')
-        if not correo.endswith('@espol.edu.ec'):
+        serializer = CourseHubTokenObtainPairSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh = request.data.get('refresh')
+        if not refresh:
             return Response(
-                {'error': 'Debe utilizar su correo institucional de la ESPOL.'},
+                {'error': 'Se requiere el token refresh.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh)
+            token.blacklist()
+        except Exception:
+            return Response(
+                {'error': 'Token inválido o ya revocado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'mensaje': 'Sesión cerrada correctamente.'})
+
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(UsuarioProfileSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = UsuarioProfileSerializer(
+            request.user, data=request.data, partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not request.user.check_password(serializer.validated_data['password_actual']):
+            return Response(
+                {'error': 'La contraseña actual es incorrecta.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            usuario = Usuario.objects.get(correo_institucional=correo)
-        except Usuario.DoesNotExist:
-            # Simulated: auto-create on first login for dev
-            import uuid
-            base = correo.split('@')[0][:45]
-            pseudonimo = f'{base}_{uuid.uuid4().hex[:4]}'
-            usuario = Usuario.objects.create(
-                microsoft_id=correo,
-                correo_institucional=correo,
-                pseudonimo=pseudonimo,
-            )
-
-        return Response({
-            'mensaje': 'Inicio de sesión exitoso.',
-            'token': f'sim-token-{usuario.id}-{usuario.microsoft_id}',
-            'usuario': UsuarioProfileSerializer(usuario).data,
-        })
+        request.user.set_password(serializer.validated_data['password_nueva'])
+        request.user.save(update_fields=['password'])
+        return Response({'mensaje': 'Contraseña actualizada correctamente.'})

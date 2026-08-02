@@ -6,14 +6,14 @@ from .models import Coleccion, Recurso
 
 
 class ColeccionSerializer(serializers.ModelSerializer):
-    usuario_pseudonimo = serializers.CharField(
-        source='usuario.pseudonimo', read_only=True, default=None,
-    )
+    materia_codigo = serializers.CharField(source='materia.codigo', read_only=True)
+    materia_nombre = serializers.CharField(source='materia.nombre', read_only=True)
+    profesor_nombre = serializers.CharField(source='profesor.nombre', read_only=True)
+    recursos_count = serializers.IntegerField(source='recursos.count', read_only=True)
 
     class Meta:
         model = Coleccion
         fields = '__all__'
-        read_only_fields = ['fecha_subida']
 
 
 class RecursoListSerializer(serializers.ModelSerializer):
@@ -35,7 +35,7 @@ class RecursoListSerializer(serializers.ModelSerializer):
         ]
 
     def get_promedio_estrellas(self, obj):
-        avg = obj.valoraciones.aggregate(avg=Avg('estrellas'))['estrellas__avg']
+        avg = obj.valoraciones.aggregate(avg=Avg('estrellas'))['avg']
         return round(avg, 1) if avg else None
 
 
@@ -53,12 +53,18 @@ class RecursoDetailSerializer(serializers.ModelSerializer):
 
 
 class RecursoCreateSerializer(serializers.ModelSerializer):
+    usuario_pseudonimo = serializers.CharField(
+        source='usuario.pseudonimo', read_only=True, default='Anónimo',
+    )
+
     class Meta:
         model = Recurso
         fields = [
-            'nombre_archivo', 'storage_key', 'categoria', 'tipo_recurso',
+            'id', 'nombre_archivo', 'storage_key', 'categoria', 'tipo_recurso',
             'coleccion', 'descripcion', 'consejo_estudio',
+            'usuario', 'usuario_pseudonimo', 'fecha_subida',
         ]
+        read_only_fields = ['id', 'usuario', 'usuario_pseudonimo', 'fecha_subida']
 
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user

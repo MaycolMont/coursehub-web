@@ -14,6 +14,19 @@ class ValoracionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('La calificación debe ser entre 1 y 5.')
         return value
 
+    def validate(self, attrs):
+        usuario = self.context['request'].user
+        recurso = attrs.get('recurso')
+        if recurso:
+            qs = Valoracion.objects.filter(usuario=usuario, recurso=recurso)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    'Ya has calificado este recurso. Edita tu valoración existente.'
+                )
+        return attrs
+
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user
         return super().create(validated_data)
@@ -28,6 +41,19 @@ class GuardadoSerializer(serializers.ModelSerializer):
         model = Guardado
         fields = '__all__'
         read_only_fields = ['usuario']
+
+    def validate(self, attrs):
+        usuario = self.context['request'].user
+        recurso = attrs.get('recurso')
+        if recurso:
+            qs = Guardado.objects.filter(usuario=usuario, recurso=recurso)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    'Este recurso ya está en tus guardados.'
+                )
+        return attrs
 
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user

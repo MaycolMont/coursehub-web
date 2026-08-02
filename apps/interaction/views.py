@@ -1,7 +1,9 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+
+from apps.accounts.permissions import IsModeradorOrAdmin
 
 from .models import Guardado, ReporteRecurso, Valoracion
 from .serializers import (
@@ -74,18 +76,16 @@ class ReporteRecursoViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        request = self.context.get('request')
-        usuario = request.user if request and request.user.is_authenticated else None
-        serializer.save(usuario=usuario)
+        serializer.save(usuario=self.request.user)
 
-    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
+    @action(detail=True, methods=['patch', 'post'], permission_classes=[IsModeradorOrAdmin])
     def atender(self, request, pk=None):
         reporte = self.get_object()
         reporte.estado = ReporteRecurso.Estado.ATENDIDO
         reporte.save(update_fields=['estado'])
         return Response({'status': 'ok', 'estado': reporte.estado})
 
-    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
+    @action(detail=True, methods=['patch', 'post'], permission_classes=[IsModeradorOrAdmin])
     def desestimar(self, request, pk=None):
         reporte = self.get_object()
         reporte.estado = ReporteRecurso.Estado.DESESTIMADO

@@ -1,6 +1,10 @@
+import os
+import uuid
+
 from django.core.management.base import BaseCommand
 
-from apps.institution.models import Carrera, CarreraMateria, Facultad, Materia
+from apps.accounts.models import Usuario
+from apps.institution.models import Carrera, CarreraMateria, Facultad, Materia, Profesor
 
 
 FACULTADES = [
@@ -111,6 +115,14 @@ CODIGO_TO_CARRERA = {
 
 CODIGO_MATERIA_MAP = {}
 
+PROFESORES = [
+    'Ing. Chang',
+    'Ing. Cedeño',
+    'Ing. Salazar',
+    'Ing. Mendoza',
+    'Ing. Vera',
+]
+
 
 class Command(BaseCommand):
     help = 'Pobla la BD con facultades, carreras y materias de ESPOL'
@@ -120,6 +132,8 @@ class Command(BaseCommand):
         self._seed_carreras()
         self._seed_materias()
         self._seed_carreras_materias()
+        self._seed_profesores()
+        self._seed_admin()
         self.stdout.write(self.style.SUCCESS('Seed completado exitosamente.'))
 
     def _seed_facultades(self):
@@ -170,3 +184,39 @@ class Command(BaseCommand):
                 count += 1
 
         self.stdout.write(f'  {count} relaciones carrera-materia creadas.')
+
+    def _seed_profesores(self):
+        for pk, nombre in enumerate(PROFESORES, start=1):
+            Profesor.objects.update_or_create(
+                id=pk, defaults={'nombre': nombre},
+            )
+        self.stdout.write(
+            self.style.WARNING(
+                f'  {len(PROFESORES)} profesores de ejemplo creados '
+                '(reemplazar con datos reales).'
+            )
+        )
+
+    def _seed_admin(self):
+        correo = os.environ.get('SEED_ADMIN_EMAIL', 'admin@espol.edu.ec')
+        password = os.environ.get('SEED_ADMIN_PASSWORD', 'AdminEspol2026!')
+        pseudonimo = os.environ.get('SEED_ADMIN_PSEUDONIMO', 'Admin_CourseHub')
+
+        admin, created = Usuario.objects.get_or_create(
+            correo_institucional=correo,
+            defaults={
+                'pseudonimo': pseudonimo,
+                'rol': Usuario.Rol.ADMINISTRADOR,
+                'is_staff': True,
+                'microsoft_id': str(uuid.uuid4()),
+            },
+        )
+        if created:
+            admin.set_password(password)
+            admin.save(update_fields=['password'])
+            self.stdout.write(f'  Usuario admin creado: {correo}')
+        else:
+            admin.rol = Usuario.Rol.ADMINISTRADOR
+            admin.is_staff = True
+            admin.save(update_fields=['rol', 'is_staff'])
+            self.stdout.write(f'  Usuario admin actualizado: {correo}')
