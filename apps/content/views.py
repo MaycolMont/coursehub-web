@@ -1,3 +1,6 @@
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
+
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -90,6 +93,20 @@ class RecursoViewSet(viewsets.ModelViewSet):
             'activo': recurso.activo,
             'mensaje': f'El recurso ahora está {estado}.',
         })
+
+    @action(detail=True, methods=['get'])
+    def descargar(self, request, pk=None):
+        recurso = get_object_or_404(Recurso, pk=pk)
+        if not recurso.archivo:
+            return Response(
+                {'error': 'Este recurso no tiene archivo adjunto.'},
+                status=404,
+            )
+        return FileResponse(
+            recurso.archivo.open('rb'),
+            as_attachment=True,
+            filename=recurso.nombre_archivo,
+        )
 
     @action(detail=True, methods=['get'])
     def compartir(self, request, pk=None):

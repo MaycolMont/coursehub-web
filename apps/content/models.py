@@ -31,10 +31,14 @@ class Recurso(models.Model):
 
     class TipoRecurso(models.TextChoices):
         PDF = 'pdf'
+        ZIP = 'zip'
         LINK = 'link'
 
     nombre_archivo = models.CharField(max_length=255)
     storage_key = models.CharField(max_length=255, unique=True)
+    archivo = models.FileField(
+        upload_to='recursos/%Y/%m/', null=True, blank=True, max_length=255,
+    )
     categoria = models.CharField(max_length=20, choices=Categoria.choices)
     tipo_recurso = models.CharField(
         max_length=20, choices=TipoRecurso.choices, default=TipoRecurso.PDF,
