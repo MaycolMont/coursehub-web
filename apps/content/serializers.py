@@ -43,12 +43,29 @@ class RecursoListSerializer(RecursoArchivoUrlMixin, serializers.ModelSerializer)
     )
     promedio_estrellas = serializers.SerializerMethodField()
     archivo_url = serializers.SerializerMethodField()
+    coleccion_titulo = serializers.CharField(
+        source='coleccion.titulo', read_only=True, default=None,
+    )
+    materia_id = serializers.IntegerField(
+        source='coleccion.materia_id', read_only=True, default=None,
+    )
+    materia_codigo = serializers.CharField(
+        source='coleccion.materia.codigo', read_only=True, default=None,
+    )
+    materia_nombre = serializers.CharField(
+        source='coleccion.materia.nombre', read_only=True, default=None,
+    )
+    profesor_nombre = serializers.CharField(
+        source='coleccion.profesor.nombre', read_only=True, default=None,
+    )
 
     class Meta:
         model = Recurso
         fields = [
-            'id', 'nombre_archivo', 'categoria', 'tipo_recurso',
+            'id', 'nombre_archivo', 'storage_key', 'categoria', 'tipo_recurso',
             'usuario', 'usuario_pseudonimo', 'coleccion',
+            'coleccion_titulo', 'materia_id', 'materia_codigo', 'materia_nombre',
+            'profesor_nombre',
             'descripcion', 'consejo_estudio', 'fecha_subida',
             'activo', 'archivo_url', 'valoraciones_count', 'promedio_estrellas',
         ]
@@ -64,6 +81,15 @@ class RecursoDetailSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
     )
     coleccion_titulo = serializers.CharField(
         source='coleccion.titulo', read_only=True, default=None,
+    )
+    materia_codigo = serializers.CharField(
+        source='coleccion.materia.codigo', read_only=True, default=None,
+    )
+    materia_nombre = serializers.CharField(
+        source='coleccion.materia.nombre', read_only=True, default=None,
+    )
+    profesor_nombre = serializers.CharField(
+        source='coleccion.profesor.nombre', read_only=True, default=None,
     )
     archivo_url = serializers.SerializerMethodField()
 

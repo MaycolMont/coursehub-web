@@ -1,9 +1,13 @@
+import io
 import os
 import uuid
+import zipfile
 
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from apps.accounts.models import Usuario
+from apps.accounts.models import Rango, Usuario
+from apps.content.models import Coleccion, Recurso
 from apps.institution.models import Carrera, CarreraMateria, Facultad, Materia, Profesor
 
 
@@ -123,6 +127,120 @@ PROFESORES = [
     'Ing. Vera',
 ]
 
+RANGOS = [
+    ('Novato', 0),
+    ('Colaborador', 100),
+    ('Héroe de la FIEC', 300),
+    ('Leyenda ESPOL', 500),
+]
+
+ESTUDIANTES_DEMO = [
+    ('anmgarci@espol.edu.ec', 'anmgarci', 850),
+    ('maleon@espol.edu.ec', 'maleon', 420),
+    ('smedina@espol.edu.ec', 'smedina', 260),
+    ('dromero@espol.edu.ec', 'dromero', 120),
+    ('pmontes@espol.edu.ec', 'pmontes', 45),
+]
+
+# (codigo_materia, titulo_coleccion, indice_profesor) -> colecciones demo.
+DEMO_COLECCIONES = [
+    ('MATG1045', 'Apuntes de Cálculo de Una Variable', 0),
+    ('MATG1049', 'Guías y exámenes de Álgebra Lineal', 1),
+    ('CCPG1043', 'Material de Fundamentos de Programación', 2),
+    ('TICG1018', 'Recursos de Sistemas de Bases de Datos', 3),
+    ('CCPG1034', 'Ejercicios de Estructuras de Datos', 4),
+    ('CCPG1809', 'Laboratorios de Inteligencia Artificial', 0),
+]
+
+# (coleccion_titulo, categoria, tipo_recurso, nombre_archivo, storage_key,
+#  autor_correo, descripcion, consejo_estudio) -> recursos demo.
+# Para links, storage_key es la URL; para archivos, es un slug único.
+DEMO_RECURSOS = [
+    ('Apuntes de Cálculo de Una Variable', 'nota', 'pdf',
+     'Apuntes de límites y derivadas', 'seed-pdf-calculo-limites',
+     'anmgarci@espol.edu.ec',
+     'Resumen de límites, continuidad y derivadas con ejemplos resueltos.',
+     'Practica derivadas todos los días, es la base de los siguientes temas.'),
+    ('Apuntes de Cálculo de Una Variable', 'prueba', 'link',
+     'Prueba 1 resuelta (2025)', 'https://drive.google.com/drive/folders/coursehub-calculo-pruebas',
+     'maleon@espol.edu.ec',
+     'Prueba 1 del 2025 con resoluciones paso a paso.',
+     'Revisa los errores más comunes antes de rendir.'),
+    ('Apuntes de Cálculo de Una Variable', 'proyecto', 'zip',
+     'Proyecto final: series de Taylor', 'seed-zip-calculo-proyecto',
+     'smedina@espol.edu.ec',
+     'Proyecto de series de Taylor con código de ejemplo.',
+     'Empiecen el proyecto con tiempo, el análisis numérico toma varias horas.'),
+    ('Guías y exámenes de Álgebra Lineal', 'nota', 'pdf',
+     'Guía de espacios vectoriales', 'seed-pdf-algebra-espacios',
+     'maleon@espol.edu.ec',
+     'Guía completa de espacios vectoriales y transformaciones lineales.',
+     'Resuelve ejercicios de subespacios con distintas dimensiones.'),
+    ('Guías y exámenes de Álgebra Lineal', 'prueba', 'link',
+     'Exámenes pasados', 'https://drive.google.com/drive/folders/coursehub-algebra-examenes',
+     'dromero@espol.edu.ec',
+     'Colección de exámenes de años anteriores.',
+     'El examen suele combinar dos temas en un mismo ejercicio.'),
+    ('Material de Fundamentos de Programación', 'nota', 'pdf',
+     'Guía de Python desde cero', 'seed-pdf-programacion-python',
+     'smedina@espol.edu.ec',
+     'Guía introductoria a Python con ejercicios de tarea.',
+     'No avances hasta dominar bucles y condicionales.'),
+    ('Material de Fundamentos de Programación', 'proyecto', 'link',
+     'Proyecto: sistema de notas', 'https://github.com/cursohub/proyecto-notas',
+     'anmgarci@espol.edu.ec',
+     'Repositorio de ejemplo del proyecto de notas.',
+     'Usa funciones pequeñas y prueba cada una por separado.'),
+    ('Recursos de Sistemas de Bases de Datos', 'nota', 'zip',
+     'Talleres de SQL resueltos', 'seed-zip-sql-talleres',
+     'dromero@espol.edu.ec',
+     'Talleres de SQL con consultas de ejemplo.',
+     'Practica JOIN y subconsultas, son la parte que más pesa.'),
+    ('Recursos de Sistemas de Bases de Datos', 'prueba', 'link',
+     'Modelos entidad-relación (ejemplos)', 'https://drive.google.com/drive/folders/coursehub-bd-mer',
+     'pmontes@espol.edu.ec',
+     'Ejemplos resueltos de diagramas MER.',
+     'Define bien las cardinalidades antes de crear tablas.'),
+    ('Ejercicios de Estructuras de Datos', 'nota', 'pdf',
+     'Apuntes de listas enlazadas', 'seed-pdf-eda-listas',
+     'anmgarci@espol.edu.ec',
+     'Implementación de listas enlazadas simples y dobles.',
+     'Dibuja la estructura cada vez que te atores en un puntero.'),
+    ('Ejercicios de Estructuras de Datos', 'prueba', 'zip',
+     'Exámenes resueltos', 'seed-zip-eda-examenes',
+     'maleon@espol.edu.ec',
+     'Exámenes pasados con soluciones.',
+     'Memoriza la complejidad de cada operación.'),
+    ('Laboratorios de Inteligencia Artificial', 'nota', 'pdf',
+     'Laboratorio 1: regresión lineal', 'seed-pdf-ia-lab1',
+     'smedina@espol.edu.ec',
+     'Laboratorio de regresión lineal con NumPy.',
+     'Comprende la función de costo antes de usar las librerías.'),
+    ('Laboratorios de Inteligencia Artificial', 'proyecto', 'link',
+     'Dataset para el proyecto final', 'https://www.kaggle.com/datasets/coursehub-demo',
+     'pmontes@espol.edu.ec',
+     'Dataset público sugerido para el proyecto final.',
+     'Documenta la limpieza de datos, pesa mucho en la rúbrica.'),
+]
+
+# (autor_correo, storage_key, estrellas) -> valoraciones demo.
+DEMO_VALORACIONES = [
+    ('anmgarci@espol.edu.ec', 'seed-pdf-calculo-limites', 5),
+    ('maleon@espol.edu.ec', 'seed-pdf-calculo-limites', 4),
+    ('smedina@espol.edu.ec', 'seed-pdf-calculo-limites', 5),
+    ('dromero@espol.edu.ec', 'seed-pdf-calculo-limites', 4),
+    ('pmontes@espol.edu.ec', 'seed-pdf-calculo-limites', 5),
+    ('anmgarci@espol.edu.ec', 'seed-pdf-programacion-python', 4),
+    ('maleon@espol.edu.ec', 'seed-pdf-programacion-python', 5),
+    ('smedina@espol.edu.ec', 'seed-pdf-programacion-python', 4),
+    ('anmgarci@espol.edu.ec', 'seed-pdf-eda-listas', 5),
+    ('maleon@espol.edu.ec', 'seed-pdf-eda-listas', 3),
+    ('smedina@espol.edu.ec', 'seed-pdf-ia-lab1', 5),
+    ('dromero@espol.edu.ec', 'seed-pdf-ia-lab1', 4),
+    ('anmgarci@espol.edu.ec', 'seed-pdf-algebra-espacios', 4),
+    ('maleon@espol.edu.ec', 'seed-zip-calculo-proyecto', 5),
+]
+
 
 class Command(BaseCommand):
     help = 'Pobla la BD con facultades, carreras y materias de ESPOL'
@@ -133,6 +251,11 @@ class Command(BaseCommand):
         self._seed_materias()
         self._seed_carreras_materias()
         self._seed_profesores()
+        self._seed_rangos()
+        self._seed_estudiantes_demo()
+        self._seed_colecciones()
+        self._seed_recursos()
+        self._seed_valoraciones()
         self._seed_admin()
         self.stdout.write(self.style.SUCCESS('Seed completado exitosamente.'))
 
@@ -196,6 +319,143 @@ class Command(BaseCommand):
                 '(reemplazar con datos reales).'
             )
         )
+
+    def _seed_rangos(self):
+        for nombre, karma_minimo in RANGOS:
+            Rango.objects.update_or_create(
+                nombre_rango=nombre,
+                defaults={'karma_minimo': karma_minimo},
+            )
+        self.stdout.write(f'  {len(RANGOS)} rangos creados.')
+
+    def _seed_estudiantes_demo(self):
+        count = 0
+        for correo, pseudonimo, karma in ESTUDIANTES_DEMO:
+            usuario, created = Usuario.objects.get_or_create(
+                correo_institucional=correo,
+                defaults={
+                    'pseudonimo': pseudonimo,
+                    'rol': Usuario.Rol.ESTUDIANTE,
+                    'karma_acumulado': karma,
+                },
+            )
+            if created:
+                usuario.set_password('123456')
+                usuario.save(update_fields=['password'])
+                count += 1
+        self.stdout.write(
+            f'  {count} estudiantes demo creados '
+            '(password: 123456, usar solo el usuario como login).'
+        )
+
+    def _seed_colecciones(self):
+        count = 0
+        for codigo, titulo, profesor_idx in DEMO_COLECCIONES:
+            materia = Materia.objects.filter(codigo=codigo).first()
+            if not materia:
+                continue
+            _, created = Coleccion.objects.get_or_create(
+                titulo=titulo,
+                materia=materia,
+                defaults={
+                    'profesor_id': profesor_idx + 1,
+                    'anio_semestre': '2026-1S',
+                },
+            )
+            if created:
+                count += 1
+        self.stdout.write(f'  {count} colecciones demo creadas.')
+
+    def _seed_recursos(self):
+        count = 0
+        for (
+            coleccion_titulo, categoria, tipo, nombre_archivo,
+            storage_key, autor_correo, descripcion, consejo,
+        ) in DEMO_RECURSOS:
+            coleccion = Coleccion.objects.filter(titulo=coleccion_titulo).first()
+            autor = Usuario.objects.filter(correo_institucional=autor_correo).first()
+            if not coleccion or not autor:
+                continue
+            recurso, created = Recurso.objects.get_or_create(
+                storage_key=storage_key,
+                defaults={
+                    'coleccion': coleccion,
+                    'usuario': autor,
+                    'categoria': categoria,
+                    'tipo_recurso': tipo,
+                    'nombre_archivo': nombre_archivo,
+                    'descripcion': descripcion,
+                    'consejo_estudio': consejo,
+                },
+            )
+            if created:
+                if tipo == 'pdf':
+                    recurso.archivo = ContentFile(
+                        self._pdf_bytes(nombre_archivo),
+                        name=f'seed_{storage_key}.pdf',
+                    )
+                elif tipo == 'zip':
+                    recurso.archivo = ContentFile(
+                        self._zip_bytes(nombre_archivo),
+                        name=f'seed_{storage_key}.zip',
+                    )
+                recurso.save()
+                count += 1
+        self.stdout.write(f'  {count} recursos demo creados.')
+
+    def _seed_valoraciones(self):
+        from apps.interaction.models import Valoracion
+
+        count = 0
+        for autor_correo, storage_key, estrellas in DEMO_VALORACIONES:
+            autor = Usuario.objects.filter(correo_institucional=autor_correo).first()
+            recurso = Recurso.objects.filter(storage_key=storage_key).first()
+            if not autor or not recurso:
+                continue
+            _, created = Valoracion.objects.get_or_create(
+                usuario=autor,
+                recurso=recurso,
+                defaults={'estrellas': estrellas},
+            )
+            if created:
+                count += 1
+        self.stdout.write(f'  {count} valoraciones demo creadas.')
+
+    def _pdf_bytes(self, texto):
+        lines = [
+            f'BT /F1 16 Tf 72 700 Td ({texto[:60]} - CourseHub) Tj ET',
+        ]
+        stream = b'\n'.join(line.encode() for line in lines) + b'\n'
+        objects = [
+            b'<< /Type /Catalog /Pages 2 0 R >>',
+            b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            (
+                b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+                b'/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>'
+            ),
+            b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'endstream',
+            b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        ]
+        out = [b'%PDF-1.4\n']
+        offsets = [0]
+        for i, obj in enumerate(objects, start=1):
+            offsets.append(len(out[0]))
+            out[0] += f'{i} 0 obj\n'.encode() + obj + b'\nendobj\n'
+        xref = len(out[0])
+        out[0] += b'xref\n0 6\n0000000000 65535 f \n'
+        for off in offsets[1:]:
+            out[0] += f'{off:010d} 00000 n \n'.encode()
+        out[0] += (
+            f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode()
+        )
+        return out[0]
+
+    def _zip_bytes(self, nombre):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('README.txt', f'{nombre} - material de CourseHub (demo)\n')
+            zf.writestr('ejercicios.txt', '1) Resuelva los ejercicios propuestos.\n')
+        return buffer.getvalue()
 
     def _seed_admin(self):
         correo = os.environ.get('SEED_ADMIN_EMAIL', 'admin@espol.edu.ec')

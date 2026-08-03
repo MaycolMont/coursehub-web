@@ -53,7 +53,7 @@ class MateriaViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'nombre']
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action in ('list', 'catalogo'):
             return MateriaListSerializer
         return MateriaSerializer
 

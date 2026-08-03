@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.content.serializers import RecursoListSerializer
+
 from .models import Guardado, ReporteRecurso, Valoracion
 
 
@@ -36,6 +38,7 @@ class GuardadoSerializer(serializers.ModelSerializer):
     recurso_titulo = serializers.CharField(
         source='recurso.nombre_archivo', read_only=True,
     )
+    recurso_detalle = RecursoListSerializer(source='recurso', read_only=True)
 
     class Meta:
         model = Guardado
@@ -61,6 +64,13 @@ class GuardadoSerializer(serializers.ModelSerializer):
 
 
 class ReporteRecursoSerializer(serializers.ModelSerializer):
+    usuario_pseudonimo = serializers.CharField(
+        source='usuario.pseudonimo', read_only=True, default='Anónimo',
+    )
+    recurso_nombre = serializers.CharField(
+        source='recurso.nombre_archivo', read_only=True,
+    )
+
     class Meta:
         model = ReporteRecurso
         fields = '__all__'
