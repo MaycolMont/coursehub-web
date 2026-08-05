@@ -41,6 +41,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -99,9 +100,21 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# True: cualquier origen puede consumir la API (útil para el frontend en InfinityFree).
+# False: solo los orígenes listados en CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1', 'yes')
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:5173,http://127.0.0.1:5173'

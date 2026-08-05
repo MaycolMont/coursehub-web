@@ -1,70 +1,47 @@
 # CourseHub
 
-Plataforma colaborativa para compartir apuntes, material de estudio y recursos entre estudiantes de ESPOL. Este repositorio contiene el **backend Django + DRF** (el frontend React+Vite vendrá aparte).
+Plataforma colaborativa para compartir apuntes, material de estudio y recursos entre estudiantes de ESPOL. Este repositorio está organizado para las actividades de despliegue:
 
-## Requisitos
+| Carpeta | Contenido | Publicación |
+| ------- | --------- | ----------- |
+| `backend/` | API REST Django + DRF | **AlwaysData** |
+| `frontend-web/` | Página estática independiente (HTML/CSS/JS) que consume la API | **InfinityFree** |
+| `frontend/` | App React+Vite del 2.º parcial (referencia) | — |
 
-- Python 3.11+
-- Sin servicios externos: usa SQLite y almacenamiento local de archivos (`media/`)
+## Estructura
 
-## Puesta en marcha
+```
+backend-coursehub/
+├── backend/          # API Django + DRF (se sube a AlwaysData)
+│   ├── coursehub/    # configuración del proyecto
+│   ├── apps/         # accounts, institution, content, interaction
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── setup.ps1 / setup.sh
+├── frontend-web/     # página independiente (se sube a InfinityFree)
+│   ├── index.html
+│   ├── css/style.css
+│   └── js/ (config.js, api.js, app.js)
+├── frontend/         # React (2.º parcial, referencia)
+└── GUIA_DEPLOY.md    # pasos para publicar en AlwaysData e InfinityFree
+```
 
-**Windows (PowerShell):**
+## Inicio rápido (backend)
+
 ```powershell
-.\setup.ps1
+cd backend
+.\setup.ps1        # crea .venv, instala dependencias, migra y siembra datos
+.\.venv\Scripts\python manage.py runserver
 ```
 
-**Linux / macOS:**
-```bash
-./setup.sh
-```
+- Admin: http://127.0.0.1:8000/admin/
+- API:   http://127.0.0.1:8000/api/
+- Docs:  http://127.0.0.1:8000/api/docs/
 
-El script crea un entorno virtual (`.venv`), instala dependencias, aplica migraciones y siembra datos de ejemplo (8 facultades, 2 carreras, 57 materias y un administrador).
+## Página web independiente (frontend-web)
 
-Alternativa manual:
-```bash
-python -m venv .venv
-.venv\Scripts\activate        # Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py seed_data
-python manage.py runserver
-```
+Abre `frontend-web/index.html` o súrvela con `python -m http.server 5522 --directory frontend-web`. Antes de usarla, ajusta `frontend-web/js/config.js` para apuntar a la URL pública del backend (en producción: la URL de AlwaysData).
 
-## Credenciales iniciales
+## Despliegue
 
-| Campo    | Valor               |
-| -------- | ------------------- |
-| Email    | `admin@espol.edu.ec` |
-| Password | `AdminEspol2026!`    |
-
-Se pueden cambiar antes de sembrar creando un `.env` (usa `.env.example` como plantilla, con variables `SEED_ADMIN_*`).
-
-## Accesos
-
-| Recurso | URL |
-| ------- | --- |
-| Admin Django | http://127.0.0.1:8000/admin/ |
-| API raíz | http://127.0.0.1:8000/api/ |
-| Docs Swagger | http://127.0.0.1:8000/api/docs/ |
-| Esquema OpenAPI | http://127.0.0.1:8000/api/schema/ |
-
-## API (resumen)
-
-**Auth** (`/api/auth/`)
-- `POST register/` — crea cuenta (correo `@espol.edu.ec` obligatorio)
-- `POST login/` — devuelve `access` y `refresh` (JWT Bearer)
-- `POST refresh/`, `POST logout/`, `GET me/`, `POST change-password/`
-
-**Catálogo** (`/api/`)
-- `facultades/`, `carreras/`, `materias/`, `materias/catalogo/`, `profesores/`
-
-**Contenido** (`/api/`)
-- `colecciones/` — colecciones por materia y profesor
-- `recursos/` — subida de PDF/ZIP (multipart, máx 40MB, 5 archivos y 1 ZIP por colección) o enlaces; `GET recursos/{id}/descargar/`
-
-**Interacción** (`/api/`)
-- `valoraciones/` (1–5 estrellas, una por usuario y recurso)
-- `guardados/`, `reportes/` (+ `atender/`, `desestimar/` para moderadores)
-
-Los endpoints se documentan en Swagger (`/api/docs/`).
+Consulta [GUIA_DEPLOY.md](GUIA_DEPLOY.md) para publicar el backend en **AlwaysData** (con MySQL) y la página en **InfinityFree**.
