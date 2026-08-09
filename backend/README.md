@@ -52,7 +52,32 @@ Se pueden cambiar antes de sembrar creando un `.env` (usa `.env.example` como pl
 | Docs Swagger | http://127.0.0.1:8000/api/docs/ |
 | Esquema OpenAPI | http://127.0.0.1:8000/api/schema/ |
 
-## Base de datos en producción (MySQL - AlwaysData)
+## Despliegue en AlwaysData (Python WSGI + MySQL)
+
+AlwaysData sirve apps Python con **Passenger**. Publica el **contenido de este directorio** (`backend/`) como raíz de la app (sube todo menos `.venv/`, `.env`, `media/`, `db.sqlite3` y `staticfiles/`).
+
+1. Sube los archivos por FTP/SFTP o clona el repositorio en el servidor.
+2. Crea un **sitio** en `Web > Sites`:
+   - Tipo: **Python WSGI**
+   - Ruta de la aplicación: apunta a `passenger_wsgi.py` (p. ej. `/home/tuusuario/backend/passenger_wsgi.py` o la carpeta donde esté el contenido).
+   - Versión de Python: 3.11 o superior (la app usa Django 5.x/6.x).
+   - Directorio virtualenv (recomendado) y variables de entorno (o crea `.env` junto a `manage.py`, ver abajo).
+3. En el servidor, instala las dependencias y prepara la base de datos:
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python manage.py migrate
+   python manage.py seed_data
+   python manage.py collectstatic
+   ```
+
+4. Reinicia el sitio desde el panel (o `touch tmp/restart.txt` si configuras el directorio de reinicio).
+
+`passenger_wsgi.py` es el punto de entrada que AlwaysData usa (expone `application`); no lo borres.
+
+### Base de datos en producción (MySQL)
 
 El hosting AlwaysData usa **MySQL**. Configura el `.env` del servidor con:
 
@@ -68,13 +93,7 @@ DJANGO_ALLOWED_HOSTS=tuusuario.alwaysdata.net
 CORS_ALLOW_ALL_ORIGINS=True
 ```
 
-Luego ejecuta migraciones y el seed:
-
-```bash
-python manage.py migrate
-python manage.py seed_data
-python manage.py collectstatic
-```
+Luego ejecuta migraciones y el seed (paso 3 de la sección anterior).
 
 ## API (resumen)
 

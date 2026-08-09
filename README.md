@@ -44,4 +44,5 @@ Abre `frontend-web/index.html` o súrvela con `python -m http.server 5522 --dire
 
 ## Despliegue
 
-Consulta [GUIA_DEPLOY.md](GUIA_DEPLOY.md) para publicar el backend en **AlwaysData** (con MySQL) y la página en **InfinityFree**.
+- **Backend (AlwaysData):** sigue la sección [Despliegue en AlwaysData](backend/README.md#despliegue-en-alwaysdata-python-wsgi--mysql) de `backend/README.md`. AlwaysData usa Passenger; el punto de entrada es `backend/passenger_wsgi.py`.
+- **Página web (InfinityFree):** súbela a `htdocs/`; antes ajusta `frontend-web/js/config.js` para apuntar a la URL pública del backend.
