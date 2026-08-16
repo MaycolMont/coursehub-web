@@ -9,9 +9,9 @@ class RecursoRawMediaStorage(RawMediaCloudinaryStorage):
     def _save(self, name, content):
         name = self._normalise_name(name)
         name = self._prepend_prefix(name)
-        root = os.path.splitext(name)[0]
-        content = UploadedFile(content, root)
-        response = self._upload(root, content)
+        uploaded_name = os.path.basename(name)
+        content = UploadedFile(content, uploaded_name)
+        response = self._upload(name, content)
         return response['public_id']
 
     def _upload(self, name, content):

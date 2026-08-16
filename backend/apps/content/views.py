@@ -1,12 +1,13 @@
+import os
+
 from django.http import FileResponse
-from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsModeradorOrAdmin
+from apps.accounts.permissions import IsModeradorOrAdmin, IsOwnerOrModeradorOrAdmin
 
 from .models import Coleccion, Recurso
 from .serializers import (
@@ -52,6 +53,11 @@ class RecursoViewSet(viewsets.ModelViewSet):
             return RecursoCreateSerializer
         return RecursoDetailSerializer
 
+    def get_permissions(self):
+        if self.action in ('update', 'partial_update', 'destroy'):
+            return [IsOwnerOrModeradorOrAdmin()]
+        return super().get_permissions()
+
     def get_queryset(self):
         qs = super().get_queryset()
         params = self.request.query_params
@@ -96,17 +102,45 @@ class RecursoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def descargar(self, request, pk=None):
-        recurso = get_object_or_404(Recurso, pk=pk)
+        recurso = self.get_object()
         if not recurso.archivo:
             return Response(
                 {'error': 'Este recurso no tiene archivo adjunto.'},
                 status=404,
             )
-        return FileResponse(
-            recurso.archivo.open('rb'),
+        try:
+            archivo = recurso.archivo.open('rb')
+        except (OSError, IOError):
+            return Response(
+                {'error': 'El archivo no está disponible en este momento.'},
+                status=404,
+            )
+
+        content_type = {
+            Recurso.TipoRecurso.PDF: 'application/pdf',
+            Recurso.TipoRecurso.ZIP: 'application/zip',
+        }.get(recurso.tipo_recurso, 'application/octet-stream')
+
+        nombre = (recurso.nombre_archivo or os.path.basename(recurso.archivo.name) or 'recurso').strip()
+        nombre = os.path.basename(nombre) or 'recurso'
+        ext_esperada = {
+            Recurso.TipoRecurso.PDF: '.pdf',
+            Recurso.TipoRecurso.ZIP: '.zip',
+        }.get(recurso.tipo_recurso, '')
+        if ext_esperada:
+            nombre_base, ext_actual = os.path.splitext(nombre)
+            if ext_actual.lower() != ext_esperada:
+                nombre = f'{nombre_base or nombre}{ext_esperada}'
+
+        response = FileResponse(
+            archivo,
             as_attachment=True,
-            filename=recurso.nombre_archivo,
+            filename=nombre,
+            content_type=content_type,
         )
+        response['Content-Type'] = content_type
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
 
     @action(detail=True, methods=['get'])
     def compartir(self, request, pk=None):
