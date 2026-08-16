@@ -9,3 +9,5 @@ Pillow>=11.0
 psycopg2-binary>=2.9
 mysqlclient>=2.2.8
 python-dotenv>=1.0
+cloudinary>=1.41
+django-cloudinary-storage>=0.3.0

@@ -1,5 +1,7 @@
 from django.db import models
 
+from .storage import RecursoRawMediaStorage
+
 
 class Coleccion(models.Model):
     titulo = models.CharField(max_length=150)
@@ -38,6 +40,7 @@ class Recurso(models.Model):
     storage_key = models.CharField(max_length=255, unique=True)
     archivo = models.FileField(
         upload_to='recursos/%Y/%m/', null=True, blank=True, max_length=255,
+        storage=RecursoRawMediaStorage(),
     )
     categoria = models.CharField(max_length=20, choices=Categoria.choices)
     tipo_recurso = models.CharField(
