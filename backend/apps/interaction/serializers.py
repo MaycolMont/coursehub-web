@@ -1,15 +1,21 @@
 from rest_framework import serializers
 
+from apps.accounts.karma import otorgar_karma, puntos_por_estrellas
 from apps.content.serializers import RecursoListSerializer
 
 from .models import Guardado, ReporteRecurso, Valoracion
 
 
 class ValoracionSerializer(serializers.ModelSerializer):
+    karma_otorgado = serializers.SerializerMethodField()
+
     class Meta:
         model = Valoracion
-        fields = '__all__'
+        fields = ['id', 'usuario', 'recurso', 'estrellas', 'karma_otorgado']
         read_only_fields = ['usuario']
+
+    def get_karma_otorgado(self, obj):
+        return getattr(obj, '_karma_otorgado', 0)
 
     def validate_estrellas(self, value):
         if value < 1 or value > 5:
@@ -19,6 +25,10 @@ class ValoracionSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         usuario = self.context['request'].user
         recurso = attrs.get('recurso')
+        if recurso and recurso.usuario_id == usuario.id:
+            raise serializers.ValidationError(
+                'No puedes calificar tu propio recurso.'
+            )
         if recurso:
             qs = Valoracion.objects.filter(usuario=usuario, recurso=recurso)
             if self.instance:
@@ -31,7 +41,13 @@ class ValoracionSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        autor = instance.recurso.usuario
+        karma = 0
+        if autor:
+            karma = otorgar_karma(autor, puntos_por_estrellas(instance.estrellas))
+        instance._karma_otorgado = karma
+        return instance
 
 
 class GuardadoSerializer(serializers.ModelSerializer):

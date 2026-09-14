@@ -27,9 +27,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'cloudinary_storage',
-    'cloudinary',
-
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
@@ -76,6 +73,7 @@ WSGI_APPLICATION = 'coursehub.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3'),
+        # En producción (Render) se usa PostgreSQL (p. ej. Supabase Postgres).
         'NAME': os.environ.get('DB_NAME', BASE_DIR / 'db.sqlite3'),
         'USER': os.environ.get('DB_USER', ''),
         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
@@ -104,25 +102,26 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STORAGES = {
     'default': {
-        'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
+        'BACKEND': 'apps.content.storage.SupabaseS3Storage',
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
-    'API_KEY': os.environ.get('CLOUDINARY_API_KEY', ''),
-    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET', ''),
-    'SECURE': True,
-}
+# Almacenamiento de archivos en Supabase Storage (API S3-compatible).
+# Define en .env las credenciales S3 del bucket 'recursos_academicos'.
+SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET', 'recursos_academicos')
+SUPABASE_S3_ENDPOINT = os.environ.get('SUPABASE_S3_ENDPOINT', '')
+SUPABASE_S3_ACCESS_KEY = os.environ.get('SUPABASE_S3_ACCESS_KEY', '')
+SUPABASE_S3_SECRET_KEY = os.environ.get('SUPABASE_S3_SECRET_KEY', '')
+SUPABASE_PUBLIC_URL = os.environ.get('SUPABASE_PUBLIC_URL', '')
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# True: cualquier origen puede consumir la API (útil para el frontend en InfinityFree).
-# False: solo los orígenes listados en CORS_ALLOWED_ORIGINS.
+# True: cualquier origen puede consumir la API (útil para desarrollo y el
+# frontend estático). False: solo los orígenes listados en CORS_ALLOWED_ORIGINS.
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1', 'yes')
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS',

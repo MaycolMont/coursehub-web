@@ -1,49 +1,22 @@
 # CourseHub - Backend API (Django + DRF)
 
-API REST de CourseHub. Este directorio es el **backend** que se publica en **AlwaysData**.
+API REST de CourseHub. Se despliega en **Render** usando PostgreSQL y Supabase Storage.
 
 ## Requisitos
 
-- Python 3.11+
-- Sin servicios externos en desarrollo: usa SQLite y almacenamiento local (`media/`)
-- Driver de base de datos según el hosting: `mysqlclient` (MySQL/MariaDB) o `psycopg2-binary` (PostgreSQL)
+- Python 3.12+
+- PostgreSQL (recomendado: Supabase Postgres)
+- Supabase Storage (bucket `recursos_academicos`) para archivos PDF/ZIP
 
-## Puesta en marcha
+## Puesta en marcha (local)
 
-Ejecutar **dentro de este directorio**:
-
-**Windows (PowerShell):**
-```powershell
-.\setup.ps1
-```
-
-**Linux / macOS:**
 ```bash
-./setup.sh
-```
-
-El script crea el entorno virtual (`.venv`), instala dependencias, aplica migraciones y siembra datos de ejemplo (8 facultades, 2 carreras, 57 materias y un administrador).
-
-Alternativa manual:
-```bash
-python -m venv .venv
-.venv\Scripts\activate        # Linux/macOS: source .venv/bin/activate
+cd backend
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py seed_data
 python manage.py runserver
 ```
-
-## Credenciales iniciales
-
-| Campo    | Valor                |
-| -------- | -------------------- |
-| Email    | `admin@espol.edu.ec` |
-| Password | `AdminEspol2026!`    |
-
-Se pueden cambiar antes de sembrar creando un `.env` (usa `.env.example` como plantilla, variables `SEED_ADMIN_*`).
-
-## Accesos
 
 | Recurso | URL |
 | ------- | --- |
@@ -52,48 +25,71 @@ Se pueden cambiar antes de sembrar creando un `.env` (usa `.env.example` como pl
 | Docs Swagger | http://127.0.0.1:8000/api/docs/ |
 | Esquema OpenAPI | http://127.0.0.1:8000/api/schema/ |
 
-## Despliegue en AlwaysData (Python WSGI + MySQL)
+Por defecto usa SQLite y almacenamiento local (no requiere servicios externos en desarrollo).
 
-AlwaysData sirve apps Python con **Passenger**. Publica el **contenido de este directorio** (`backend/`) como raíz de la app (sube todo menos `.venv/`, `.env`, `media/`, `db.sqlite3` y `staticfiles/`).
+## Credenciales iniciales (seed)
 
-1. Sube los archivos por FTP/SFTP o clona el repositorio en el servidor.
-2. Crea un **sitio** en `Web > Sites`:
-   - Tipo: **Python WSGI**
-   - Ruta de la aplicación: apunta a `passenger_wsgi.py` (p. ej. `/home/tuusuario/backend/passenger_wsgi.py` o la carpeta donde esté el contenido).
-   - Versión de Python: 3.11 o superior (la app usa Django 5.x/6.x).
-   - Directorio virtualenv (recomendado) y variables de entorno (o crea `.env` junto a `manage.py`, ver abajo).
-3. En el servidor, instala las dependencias y prepara la base de datos:
+| Campo    | Valor                |
+| -------- | -------------------- |
+| Email    | `admin@espol.edu.ec` |
+| Password | `AdminEspol2026!`    |
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   python manage.py migrate
-   python manage.py seed_data
-   python manage.py collectstatic
-   ```
+Se pueden cambiar creando un `.env` (usa `.env.example` como plantilla, variables `SEED_ADMIN_*`).
 
-4. Reinicia el sitio desde el panel (o `touch tmp/restart.txt` si configuras el directorio de reinicio).
+## Despliegue en Render
 
-`passenger_wsgi.py` es el punto de entrada que AlwaysData usa (expone `application`); no lo borres.
+Render ejecuta el `render.yaml` que está en la raíz del repo. El servicio:
 
-### Base de datos en producción (MySQL)
+- **Runtime:** Python
+- **WSGI server:** gunicorn
+- **DB:** PostgreSQL (recomendado: Supabase Postgres, pooler transaccional)
+- **Archivos:** Supabase Storage vía API S3 (bucket público)
+- **Estáticos:** whitenoise (recogidos con `collectstatic`)
+- **Arranque:** `migrate → collectstatic → gunicorn`
 
-El hosting AlwaysData usa **MySQL**. Configura el `.env` del servidor con:
+### Variables de entorno necesarias
 
+| Variable | Descripción | Ejemplo |
+| -------- | ----------- | ------- |
+| `DJANGO_SECRET_KEY` | Clave secreta de Django (genera una propia) | `render la genera automáticamente` |
+| `DJANGO_DEBUG` | `False` en producción | `False` |
+| `DJANGO_ALLOWED_HOSTS` | Dominio(s) del servicio en Render | `mi-app.onrender.com` |
+| `CORS_ALLOW_ALL_ORIGINS` | `True` permite cualquier origen | `True` |
+| `DB_ENGINE` | `django.db.backends.postgresql` | `django.db.backends.postgresql` |
+| `DB_NAME` | Nombre de la base (PostgreSQL) | `postgres` |
+| `DB_USER` | Usuario de la base | `postgres.mi-ref` |
+| `DB_PASSWORD` | Contraseña de la base | (completar en Render) |
+| `DB_HOST` | Host de la base | `aws-0-us-east-1.pooler.supabase.com` |
+| `DB_PORT` | Puerto de la base | `6543` |
+| `SUPABASE_BUCKET` | Nombre del bucket | `recursos_academicos` |
+| `SUPABASE_PUBLIC_URL` | URL pública del proyecto Supabase | `https://mi-ref.supabase.co` |
+| `SUPABASE_S3_ENDPOINT` | Endpoint S3-compatible de Supabase | `https://mi-ref.storage.supabase.co/storage/v1/s3` |
+| `SUPABASE_S3_ACCESS_KEY` | Access key S3 del bucket | (completar en Render) |
+| `SUPABASE_S3_SECRET_KEY` | Secret key S3 del bucket | (completar en Render) |
+
+### Conexión a Supabase Postgres
+
+1. En Supabase Dashboard → Project Settings → Database → **Connection string**
+2. Usar el pooler transaccional (compatible IPv4):
+   - Host: `aws-0-us-east-1.pooler.supabase.com`
+   - Puerto: `6543`
+   - User: `postgres.mi-project-ref`
+   - Password: la contraseña del DB
+3. Setea las variables `DB_*` en Render Dashboard con estos datos.
+
+### Post-deploy
+
+Una vez desplegado, ejecuta en **Render Shell** (o `ssh` si está habilitado):
+
+```bash
+python manage.py createsuperuser
 ```
-DB_ENGINE=django.db.backends.mysql
-DB_NAME=tuusuario_coursehub
-DB_USER=tuusuario
-DB_PASSWORD=tu_password
-DB_HOST=mysql-tuusuario.alwaysdata.net
-DB_PORT=3306
-DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=tuusuario.alwaysdata.net
-CORS_ALLOW_ALL_ORIGINS=True
-```
 
-Luego ejecuta migraciones y el seed (paso 3 de la sección anterior).
+O para poblar datos de demo:
+
+```bash
+python manage.py seed_data
+```
 
 ## API (resumen)
 
@@ -107,7 +103,9 @@ Luego ejecuta migraciones y el seed (paso 3 de la sección anterior).
 
 **Contenido** (`/api/`)
 - `colecciones/` — colecciones por materia y profesor
-- `recursos/` — subida de PDF/ZIP (multipart, máx 40MB) o enlaces; `GET recursos/{id}/descargar/`
+- `recursos/` — subida de PDF/ZIP (multipart, máx 15 MB) o enlaces
+- `recursos/{id}/previsualizar/` — redirige a la URL pública del archivo (302)
+- `recursos/{id}/descargar/` — descarga el archivo (proxy con Content-Disposition: attachment)
 
 **Interacción** (`/api/`)
 - `valoraciones/` (1–5 estrellas), `guardados/`, `reportes/` (+ `atender/`, `desestimar/`)

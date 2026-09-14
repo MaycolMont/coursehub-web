@@ -1,6 +1,6 @@
 from django.db import models
 
-from .storage import RecursoRawMediaStorage
+from .storage import SupabaseS3Storage
 
 
 class Coleccion(models.Model):
@@ -38,9 +38,10 @@ class Recurso(models.Model):
 
     nombre_archivo = models.CharField(max_length=255)
     storage_key = models.CharField(max_length=255, unique=True)
+    url = models.URLField(max_length=512, null=True, blank=True)
     archivo = models.FileField(
         upload_to='recursos/%Y/%m/', null=True, blank=True, max_length=255,
-        storage=RecursoRawMediaStorage(),
+        storage=SupabaseS3Storage(),
     )
     categoria = models.CharField(max_length=20, choices=Categoria.choices)
     tipo_recurso = models.CharField(

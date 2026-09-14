@@ -1,6 +1,7 @@
 import os
 
 from django.http import FileResponse
+from botocore.exceptions import ClientError
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -110,7 +111,7 @@ class RecursoViewSet(viewsets.ModelViewSet):
             )
         try:
             archivo = recurso.archivo.open('rb')
-        except (OSError, IOError):
+        except (OSError, IOError, ClientError):
             return Response(
                 {'error': 'El archivo no está disponible en este momento.'},
                 status=404,
@@ -140,6 +141,48 @@ class RecursoViewSet(viewsets.ModelViewSet):
         )
         response['Content-Type'] = content_type
         response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
+
+    @action(detail=True, methods=['get'])
+    def previsualizar(self, request, pk=None):
+        recurso = self.get_object()
+        if not recurso.archivo:
+            return Response(
+                {'error': 'Este recurso no tiene archivo adjunto.'},
+                status=404,
+            )
+        try:
+            archivo = recurso.archivo.open('rb')
+        except (OSError, IOError, ClientError):
+            return Response(
+                {'error': 'El archivo no está disponible en este momento.'},
+                status=404,
+            )
+
+        content_type = {
+            Recurso.TipoRecurso.PDF: 'application/pdf',
+            Recurso.TipoRecurso.ZIP: 'application/zip',
+        }.get(recurso.tipo_recurso, 'application/octet-stream')
+
+        nombre = (recurso.nombre_archivo or os.path.basename(recurso.archivo.name) or 'recurso').strip()
+        nombre = os.path.basename(nombre) or 'recurso'
+        ext_esperada = {
+            Recurso.TipoRecurso.PDF: '.pdf',
+            Recurso.TipoRecurso.ZIP: '.zip',
+        }.get(recurso.tipo_recurso, '')
+        if ext_esperada:
+            nombre_base, ext_actual = os.path.splitext(nombre)
+            if ext_actual.lower() != ext_esperada:
+                nombre = f'{nombre_base or nombre}{ext_esperada}'
+
+        response = FileResponse(
+            archivo,
+            as_attachment=False,
+            filename=nombre,
+            content_type=content_type,
+        )
+        response['Content-Type'] = content_type
+        response['Content-Disposition'] = f'inline; filename="{nombre}"'
         return response
 
     @action(detail=True, methods=['get'])

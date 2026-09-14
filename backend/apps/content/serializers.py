@@ -5,9 +5,11 @@ from django.db.models import Avg
 
 from rest_framework import serializers
 
+from apps.accounts.karma import KARMA_SUBIR_RECURSO, otorgar_karma
+
 from .models import Coleccion, Recurso
 
-MAX_ARCHIVO_MB = 40
+MAX_ARCHIVO_MB = 15
 MAX_ARCHIVO_BYTES = MAX_ARCHIVO_MB * 1024 * 1024
 EXTENSIONES_PERMITIDAS = {'.pdf', '.zip'}
 MAX_ARCHIVOS_POR_COLECCION = 5
@@ -26,6 +28,8 @@ class ColeccionSerializer(serializers.ModelSerializer):
 
 class RecursoArchivoUrlMixin:
     def get_archivo_url(self, obj):
+        if obj.url:
+            return obj.url
         if not obj.archivo:
             return None
         request = self.context.get('request')
@@ -67,7 +71,7 @@ class RecursoListSerializer(RecursoArchivoUrlMixin, serializers.ModelSerializer)
             'coleccion_titulo', 'materia_id', 'materia_codigo', 'materia_nombre',
             'profesor_nombre',
             'descripcion', 'consejo_estudio', 'fecha_subida',
-            'activo', 'archivo_url', 'valoraciones_count', 'promedio_estrellas',
+            'activo', 'url', 'archivo_url', 'valoraciones_count', 'promedio_estrellas',
         ]
 
     def get_promedio_estrellas(self, obj):
@@ -79,6 +83,10 @@ class RecursoDetailSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
     usuario_pseudonimo = serializers.CharField(
         source='usuario.pseudonimo', read_only=True, default='Anónimo',
     )
+    valoraciones_count = serializers.IntegerField(
+        source='valoraciones.count', read_only=True, default=0,
+    )
+    promedio_estrellas = serializers.SerializerMethodField()
     coleccion_titulo = serializers.CharField(
         source='coleccion.titulo', read_only=True, default=None,
     )
@@ -97,6 +105,10 @@ class RecursoDetailSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
         model = Recurso
         fields = '__all__'
 
+    def get_promedio_estrellas(self, obj):
+        avg = obj.valoraciones.aggregate(avg=Avg('estrellas'))['avg']
+        return round(avg, 1) if avg else None
+
 
 class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerializer):
     usuario_pseudonimo = serializers.CharField(
@@ -104,19 +116,28 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
     )
     archivo = serializers.FileField(required=False, allow_null=True)
     archivo_url = serializers.SerializerMethodField()
+    karma_ganado = serializers.SerializerMethodField()
+    karma_acumulado = serializers.SerializerMethodField()
 
     class Meta:
         model = Recurso
         fields = [
-            'id', 'nombre_archivo', 'storage_key', 'archivo', 'archivo_url',
+            'id', 'nombre_archivo', 'storage_key', 'archivo', 'archivo_url', 'url',
             'categoria', 'tipo_recurso', 'coleccion', 'descripcion',
             'consejo_estudio', 'usuario', 'usuario_pseudonimo', 'fecha_subida',
+            'karma_ganado', 'karma_acumulado',
         ]
         read_only_fields = ['id', 'usuario', 'usuario_pseudonimo', 'fecha_subida']
         extra_kwargs = {
             'nombre_archivo': {'required': False, 'allow_blank': True},
             'storage_key': {'required': False, 'allow_blank': True},
         }
+
+    def get_karma_ganado(self, obj):
+        return getattr(obj, '_karma_ganado', 0)
+
+    def get_karma_acumulado(self, obj):
+        return getattr(obj, '_karma_total', 0)
 
     def validate_archivo(self, value):
         if value is None:
@@ -182,4 +203,11 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
             if not validated_data.get('nombre_archivo'):
                 validated_data['nombre_archivo'] = nombre_original
         validated_data['usuario'] = self.context['request'].user
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        if instance.archivo and instance.archivo.name:
+            instance.url = instance.archivo.url
+            instance.save(update_fields=['url'])
+        karma_total = otorgar_karma(instance.usuario, KARMA_SUBIR_RECURSO)
+        instance._karma_ganado = KARMA_SUBIR_RECURSO
+        instance._karma_total = karma_total
+        return instance
