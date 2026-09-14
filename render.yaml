@@ -33,7 +33,7 @@ services:
         value: "False"
 
       - key: DJANGO_ALLOWED_HOSTS
-        value: "coursehub-api.onrender.com"
+        value: ".onrender.com"
 
       - key: CORS_ALLOW_ALL_ORIGINS
         value: "True"
