@@ -1,48 +1,50 @@
 # CourseHub
 
-Plataforma colaborativa para compartir apuntes, material de estudio y recursos entre estudiantes de ESPOL. Este repositorio está organizado para las actividades de despliegue:
+Plataforma colaborativa para compartir apuntes, material de estudio y recursos entre estudiantes de ESPOL.
 
 | Carpeta | Contenido | Publicación |
 | ------- | --------- | ----------- |
-| `backend/` | API REST Django + DRF | **AlwaysData** |
-| `frontend-web/` | Página estática independiente (HTML/CSS/JS) que consume la API | **InfinityFree** |
-| `frontend/` | App React+Vite del 2.º parcial (referencia) | — |
+| `backend/` | API REST Django + DRF | **Render** (Web Service) |
+| `supabase/` | Migraciones SQL de infraestructura (bucket) | **Supabase** |
 
 ## Estructura
 
 ```
 backend-coursehub/
-├── backend/          # API Django + DRF (se sube a AlwaysData)
+├── backend/          # API Django + DRF
 │   ├── coursehub/    # configuración del proyecto
 │   ├── apps/         # accounts, institution, content, interaction
 │   ├── manage.py
-│   ├── requirements.txt
-│   └── setup.ps1 / setup.sh
-├── frontend-web/     # página independiente (se sube a InfinityFree)
-│   ├── index.html
-│   ├── css/style.css
-│   └── js/ (config.js, api.js, app.js)
-├── frontend/         # React (2.º parcial, referencia)
-└── GUIA_DEPLOY.md    # pasos para publicar en AlwaysData e InfinityFree
+│   └── requirements.txt
+├── supabase/         # migraciones SQL (bucket de recursos)
+└── render.yaml       # Blueprint de Render (despliegue del backend)
 ```
 
 ## Inicio rápido (backend)
 
 ```powershell
 cd backend
-.\setup.ps1        # crea .venv, instala dependencias, migra y siembra datos
-.\.venv\Scripts\python manage.py runserver
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_data
+python manage.py runserver
 ```
 
 - Admin: http://127.0.0.1:8000/admin/
 - API:   http://127.0.0.1:8000/api/
 - Docs:  http://127.0.0.1:8000/api/docs/
 
-## Página web independiente (frontend-web)
+## Despliegue en Render
 
-Abre `frontend-web/index.html` o súrvela con `python -m http.server 5522 --directory frontend-web`. Antes de usarla, ajusta `frontend-web/js/config.js` para apuntar a la URL pública del backend (en producción: la URL de AlwaysData).
+1. Push del repo a GitHub.
+2. En **Render Dashboard → New → Blueprint**, selecciona el repo.
+3. Render detecta `render.yaml` en la raíz y crea el Web Service automáticamente.
+4. En **Environment → EnvVars**, completa las variables secretas:
+   - `DB_PASSWORD` — contraseña del PostgreSQL de Supabase
+   - `SUPABASE_S3_ACCESS_KEY`
+   - `SUPABASE_S3_SECRET_KEY`
+5. Ajusta `DJANGO_ALLOWED_HOSTS` con el dominio asignado por Render (p. ej. `mi-app.onrender.com` o tu dominio propio).
+6. La primera ejecución aplica migraciones, recoge estáticos y arranca gunicorn.
+7. Para crear el superadmin, ejecuta en **Render Shell**: `python manage.py createsuperuser`
 
-## Despliegue
-
-- **Backend (AlwaysData):** sigue la sección [Despliegue en AlwaysData](backend/README.md#despliegue-en-alwaysdata-python-wsgi--mysql) de `backend/README.md`. AlwaysData usa Passenger; el punto de entrada es `backend/passenger_wsgi.py`.
-- **Página web (InfinityFree):** súbela a `htdocs/`; antes ajusta `frontend-web/js/config.js` para apuntar a la URL pública del backend.
+Para más detalles, ver [backend/README.md](backend/README.md).

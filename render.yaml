@@ -1,0 +1,72 @@
+# CourseHub - Render Blueprint
+# Configura este archivo, haz push a tu repo y crea el Web Service desde
+# Render Dashboard > New > Blueprint. Render ejecuta buildCommand/startCommand
+# al desplegar. Las variables con "generateValue" se generan automáticamente;
+# las demás debes completarlas en el dashboard después del primer deploy.
+
+services:
+  - type: web
+    name: coursehub-api
+    runtime: python
+    rootDir: backend
+
+    buildCommand: pip install -r requirements.txt
+
+    startCommand: >-
+      python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      gunicorn coursehub.wsgi:application
+      --bind 0.0.0.0:$PORT
+      --workers 2
+      --timeout 120
+
+    healthCheckPath: /api/docs/
+    autoDeploy: true
+    plan: free
+
+    envVars:
+      # ── Django core ────────────────────────────────────────────────
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
+      - key: DJANGO_DEBUG
+        value: "False"
+
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "coursehub-api.onrender.com"
+
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "True"
+
+      # ── PostgreSQL (Supabase) ─────────────────────────────────────
+      - key: DB_ENGINE
+        value: django.db.backends.postgresql
+
+      - key: DB_NAME
+        value: postgres
+
+      - key: DB_USER
+        value: "postgres.aeiptwdvyserqbeyidci"
+
+      - key: DB_HOST
+        value: "aws-0-us-east-1.pooler.supabase.com"
+
+      - key: DB_PORT
+        value: "6543"
+
+      # Completar en dashboard de Render:
+      # - DB_PASSWORD  (la contraseña del DB de Supabase)
+
+      # ── Supabase Storage (S3-compatible) ──────────────────────────
+      - key: SUPABASE_BUCKET
+        value: recursos_academicos
+
+      - key: SUPABASE_PUBLIC_URL
+        value: "https://aeiptwdvyserqbeyidci.supabase.co"
+
+      - key: SUPABASE_S3_ENDPOINT
+        value: "https://aeiptwdvyserqbeyidci.storage.supabase.co/storage/v1/s3"
+
+      # Completar en dashboard de Render:
+      # - SUPABASE_S3_ACCESS_KEY
+      # - SUPABASE_S3_SECRET_KEY
