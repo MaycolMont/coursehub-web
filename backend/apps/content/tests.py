@@ -9,10 +9,11 @@ from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.accounts.models import Usuario
-from apps.content.models import Recurso
+from apps.content.models import Coleccion, Recurso
 from apps.content.serializers import MAX_ARCHIVO_BYTES, RecursoCreateSerializer
 from apps.content.storage import SupabaseS3Storage
 from apps.content.views import RecursoViewSet
+from apps.institution.models import Materia, Profesor
 
 
 class RecursoDescargaTests(TestCase):
@@ -150,6 +151,7 @@ class RecursoKarmaTests(TestCase):
         self.client.force_authenticate(self.usuario)
 
     def test_crear_recurso_otorga_10_karma_al_autor(self):
+        materia = Materia.objects.create(codigo='MATG9000', nombre='Materia karma')
         response = self.client.post(
             '/api/recursos/',
             {
@@ -157,6 +159,7 @@ class RecursoKarmaTests(TestCase):
                 'storage_key': 'https://example.com/guia-fisica',
                 'categoria': Recurso.Categoria.NOTA,
                 'tipo_recurso': Recurso.TipoRecurso.LINK,
+                'materia_id': materia.id,
             },
             format='json',
         )
@@ -166,3 +169,140 @@ class RecursoKarmaTests(TestCase):
         self.assertEqual(response.data['karma_acumulado'], 10)
         self.usuario.refresh_from_db()
         self.assertEqual(self.usuario.karma_acumulado, 10)
+
+
+class RecursoMateriaTests(TestCase):
+    def setUp(self):
+        self.usuario = Usuario.objects.create_user(
+            correo_institucional='materia@espol.edu.ec',
+            pseudonimo='materia',
+            password='test1234',
+        )
+        self.materia = Materia.objects.create(
+            codigo='MATG9999',
+            nombre='Materia de prueba',
+        )
+        self.profesor = Profesor.objects.create(nombre='Profesor de prueba')
+        self.coleccion = Coleccion.objects.create(
+            titulo='Colección de prueba',
+            materia=self.materia,
+            profesor=self.profesor,
+            anio_semestre='2026-1',
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.usuario)
+
+    def _datos_recurso(self, materia_id=None):
+        return {
+            'nombre_archivo': 'Recurso de prueba',
+            'storage_key': 'https://example.com/recurso-prueba',
+            'categoria': Recurso.Categoria.NOTA,
+            'tipo_recurso': Recurso.TipoRecurso.LINK,
+            **({'materia_id': materia_id} if materia_id is not None else {}),
+        }
+
+    def test_crear_enlace_sin_coleccion(self):
+        response = self.client.post(
+            '/api/recursos/', self._datos_recurso(self.materia.id), format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data['coleccion'])
+        self.assertEqual(response.data['materia_id'], self.materia.id)
+        self.assertEqual(
+            Recurso.objects.get(pk=response.data['id']).coleccion_id,
+            None,
+        )
+
+    @patch('apps.content.storage.boto3.client')
+    def test_crear_pdf_sin_coleccion(self, client_mock):
+        response = self.client.post(
+            '/api/recursos/',
+            {
+                'materia_id': self.materia.id,
+                'categoria': Recurso.Categoria.NOTA,
+                'tipo_recurso': Recurso.TipoRecurso.PDF,
+                'archivo': SimpleUploadedFile('guia.pdf', b'%PDF-1.4'),
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data['coleccion'])
+        self.assertEqual(response.data['materia_id'], self.materia.id)
+
+    def test_crear_en_materia_sin_colecciones(self):
+        materia = Materia.objects.create(codigo='MATG9001', nombre='Sin colección')
+        response = self.client.post(
+            '/api/recursos/', self._datos_recurso(materia.id), format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_rechaza_materia_id_inexistente(self):
+        response = self.client.post(
+            '/api/recursos/', self._datos_recurso(999999), format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('materia_id', response.data)
+
+    def test_rechaza_coleccion_de_otra_materia(self):
+        otra_materia = Materia.objects.create(codigo='MATG9002', nombre='Otra materia')
+        response = self.client.post(
+            '/api/recursos/',
+            {
+                **self._datos_recurso(otra_materia.id),
+                'storage_key': 'https://example.com/otro-recurso',
+                'coleccion': self.coleccion.id,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('coleccion', response.data)
+
+    def test_creacion_legacy_solo_con_coleccion_infiere_materia(self):
+        response = self.client.post(
+            '/api/recursos/',
+            {**self._datos_recurso(), 'coleccion': self.coleccion.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['materia_id'], self.materia.id)
+
+    def test_lista_recursos_sin_coleccion_y_con_paginacion(self):
+        self.client.post(
+            '/api/recursos/', self._datos_recurso(self.materia.id), format='json',
+        )
+        response = self.client.get(f'/api/recursos/?materia_id={self.materia.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('results', response.data)
+        self.assertEqual(response.data['results'][0]['materia_id'], self.materia.id)
+        self.assertIsNone(response.data['results'][0]['coleccion'])
+
+    def test_rechaza_sin_materia_ni_coleccion(self):
+        response = self.client.post(
+            '/api/recursos/', self._datos_recurso(), format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('materia_id', response.data)
+
+    def test_rechaza_archivo_y_storage_key_simultaneos(self):
+        response = self.client.post(
+            '/api/recursos/',
+            {
+                **self._datos_recurso(self.materia.id),
+                'archivo': SimpleUploadedFile('guia.pdf', b'%PDF-1.4'),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('archivo', response.data)
+        self.assertIn('storage_key', response.data)
+
+    def test_rechaza_enlace_sin_storage_key(self):
+        datos = self._datos_recurso(self.materia.id)
+        datos.pop('storage_key')
+        response = self.client.post('/api/recursos/', datos, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('storage_key', response.data)

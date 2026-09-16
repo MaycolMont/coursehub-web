@@ -51,6 +51,10 @@ class Recurso(models.Model):
         'accounts.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
         db_column='usuario_id', related_name='recursos',
     )
+    materia = models.ForeignKey(
+        'institution.Materia', on_delete=models.RESTRICT, null=True, blank=True,
+        db_column='materia_id', related_name='recursos',
+    )
     coleccion = models.ForeignKey(
         Coleccion, on_delete=models.CASCADE, null=True, blank=True,
         db_column='coleccion_id', related_name='recursos',

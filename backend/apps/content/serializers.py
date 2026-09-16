@@ -6,6 +6,7 @@ from django.db.models import Avg
 from rest_framework import serializers
 
 from apps.accounts.karma import KARMA_SUBIR_RECURSO, otorgar_karma
+from apps.institution.models import Materia
 
 from .models import Coleccion, Recurso
 
@@ -51,13 +52,13 @@ class RecursoListSerializer(RecursoArchivoUrlMixin, serializers.ModelSerializer)
         source='coleccion.titulo', read_only=True, default=None,
     )
     materia_id = serializers.IntegerField(
-        source='coleccion.materia_id', read_only=True, default=None,
+        read_only=True, default=None,
     )
     materia_codigo = serializers.CharField(
         source='coleccion.materia.codigo', read_only=True, default=None,
     )
     materia_nombre = serializers.CharField(
-        source='coleccion.materia.nombre', read_only=True, default=None,
+        source='materia.nombre', read_only=True, default=None,
     )
     profesor_nombre = serializers.CharField(
         source='coleccion.profesor.nombre', read_only=True, default=None,
@@ -91,13 +92,16 @@ class RecursoDetailSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
         source='coleccion.titulo', read_only=True, default=None,
     )
     materia_codigo = serializers.CharField(
-        source='coleccion.materia.codigo', read_only=True, default=None,
+        source='materia.codigo', read_only=True, default=None,
     )
     materia_nombre = serializers.CharField(
-        source='coleccion.materia.nombre', read_only=True, default=None,
+        source='materia.nombre', read_only=True, default=None,
     )
     profesor_nombre = serializers.CharField(
         source='coleccion.profesor.nombre', read_only=True, default=None,
+    )
+    materia_id = serializers.IntegerField(
+        read_only=True, default=None,
     )
     archivo_url = serializers.SerializerMethodField()
 
@@ -118,6 +122,18 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
     archivo_url = serializers.SerializerMethodField()
     karma_ganado = serializers.SerializerMethodField()
     karma_acumulado = serializers.SerializerMethodField()
+    materia_nombre = serializers.CharField(
+        source='materia.nombre', read_only=True, default=None,
+    )
+    coleccion_titulo = serializers.CharField(
+        source='coleccion.titulo', read_only=True, default=None,
+    )
+    materia_id = serializers.PrimaryKeyRelatedField(
+        source='materia',
+        queryset=Materia.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Recurso
@@ -125,12 +141,14 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
             'id', 'nombre_archivo', 'storage_key', 'archivo', 'archivo_url', 'url',
             'categoria', 'tipo_recurso', 'coleccion', 'descripcion',
             'consejo_estudio', 'usuario', 'usuario_pseudonimo', 'fecha_subida',
-            'karma_ganado', 'karma_acumulado',
+            'karma_ganado', 'karma_acumulado', 'materia_id', 'materia_nombre',
+            'coleccion_titulo',
         ]
         read_only_fields = ['id', 'usuario', 'usuario_pseudonimo', 'fecha_subida']
         extra_kwargs = {
             'nombre_archivo': {'required': False, 'allow_blank': True},
             'storage_key': {'required': False, 'allow_blank': True},
+            'coleccion': {'required': False, 'allow_null': True},
         }
 
     def get_karma_ganado(self, obj):
@@ -158,6 +176,28 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
         archivo = attrs.get('archivo')
         storage_key = attrs.get('storage_key')
         coleccion = attrs.get('coleccion')
+        materia = attrs.get('materia')
+
+        if materia is None and coleccion is None:
+            raise serializers.ValidationError({
+                'materia_id': 'Este campo es obligatorio cuando no se indica una colección.'
+            })
+
+        if materia is None and coleccion is not None:
+            materia = coleccion.materia
+            attrs['materia'] = materia
+
+        if materia is not None and coleccion is not None:
+            if coleccion.materia_id != materia.id:
+                raise serializers.ValidationError({
+                    'coleccion': 'La colección no pertenece a la materia indicada.'
+                })
+
+        if archivo and storage_key:
+            raise serializers.ValidationError({
+                'archivo': 'No se pueden enviar archivo y storage_key simultáneamente.',
+                'storage_key': 'No se pueden enviar archivo y storage_key simultáneamente.',
+            })
 
         if tipo in (Recurso.TipoRecurso.PDF, Recurso.TipoRecurso.ZIP):
             if not archivo:
@@ -166,11 +206,11 @@ class RecursoCreateSerializer(RecursoArchivoUrlMixin, serializers.ModelSerialize
                 })
             self._validar_limites_coleccion(tipo, coleccion)
         elif tipo == Recurso.TipoRecurso.LINK:
-            if archivo:
+            if not storage_key:
                 raise serializers.ValidationError({
-                    'archivo': 'Un recurso tipo enlace no puede llevar archivo adjunto.'
+                    'storage_key': 'Un recurso tipo enlace requiere una URL válida (http/https).'
                 })
-            if not storage_key or not storage_key.startswith(('http://', 'https://')):
+            if not storage_key.startswith(('http://', 'https://')):
                 raise serializers.ValidationError({
                     'storage_key': 'Un recurso tipo enlace requiere una URL válida (http/https).'
                 })

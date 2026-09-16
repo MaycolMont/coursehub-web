@@ -40,7 +40,7 @@ class ColeccionViewSet(viewsets.ModelViewSet):
 class RecursoViewSet(viewsets.ModelViewSet):
     queryset = (
         Recurso.objects
-        .select_related('usuario', 'coleccion')
+        .select_related('usuario', 'materia', 'coleccion')
         .prefetch_related('valoraciones')
         .all()
     )
@@ -65,7 +65,7 @@ class RecursoViewSet(viewsets.ModelViewSet):
 
         materia_id = params.get('materia_id')
         if materia_id:
-            qs = qs.filter(coleccion__materia_id=materia_id)
+            qs = qs.filter(materia_id=materia_id)
 
         coleccion_id = params.get('coleccion_id')
         if coleccion_id:
